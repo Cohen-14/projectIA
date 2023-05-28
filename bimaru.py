@@ -2,12 +2,12 @@
 # Devem alterar as classes e funções neste ficheiro de acordo com as instruções do enunciado.
 # Além das funções e classes já definidas, podem acrescentar outras que considerem pertinentes.
 
-# Grupo 00:
-# 00000 Nome1
-# 00000 Nome2
+# Grupo 35:
+# 92552 Rodrigo Miguel Machado Santos
+# 99192 Cláudio Cohen Campos
 
 import sys
-import copy
+# import copy - can we use this?
 from search import (
     Problem,
     Node,
@@ -44,6 +44,8 @@ class Board:
         """Devolve o valor na respetiva posição do tabuleiro."""
         if (isNone(self, row, col)):
             return None
+        elif (self.table[row][col] == "."):
+            return 'w'
         return self.table[row][col]
 
     def adjacent_vertical_values(self, row: int, col: int) -> tuple([str, str]):
@@ -103,7 +105,7 @@ class Board:
 
 
     def print(self):
-        '''Imprime a visualização externa de um tabuleiro Board'''
+        """Imprime a visualização externa de um tabuleiro Board"""
         for i in range(len(self.table)):
             for j in range(len(self.table[0])):
                 print(self.table[i][j], end = '')
@@ -114,19 +116,19 @@ class Bimaru(Problem):
     def __init__(self, board: Board):
         """O construtor especifica o estado inicial."""
         self.initial = BimaruState(board)
-        pass
 
     def actions(self, state: BimaruState):
         """Retorna uma lista de ações que podem ser executadas a
         partir do estado passado como argumento."""
-        board_filled = checkForCompletedLines(state.board)
+        board_filled = checkForCompletedLines(state.board) # Altera destrutivamente a tabela (passado por referência?)
         # To do: Check for ship adjancences
         moves = []
         for i in range(len(board_filled.row)):
             for j in range(len(board_filled.col)):
                 if (isNone(board, i, j)):
-                    for c in "mw": # m: middle, w: water
-                        moves.append(tuple([i, j, c]))
+                    for c in "wm": # 'm': middle, 'w': water, só pode preencher com estes símbolos
+                      moves.append(tuple([i, j, c]))
+        print(moves)
         return moves
                 
 
@@ -135,15 +137,14 @@ class Bimaru(Problem):
         'state' passado como argumento. A ação a executar deve ser uma
         das presentes na lista obtida pela execução de
         self.actions(state)."""
-        board_filled = checkForCompletedLines(state.board)
-        return BimaruState(board_filled)
+        board_played = fillCell(state.board, action)
+        return BimaruState(board_played)
 
     def goal_test(self, state: BimaruState):
         """Retorna True se e só se o estado passado como argumento é
         um estado objetivo. Deve verificar se todas as posições do tabuleiro
         estão preenchidas de acordo com as regras do problema."""
-
-        pass
+        return countEmptyCells(state.board) == 0 # To change
 
     def h(self, node: Node):
         """Função heuristica utilizada para a procura A*."""
@@ -152,28 +153,54 @@ class Bimaru(Problem):
 
     # TODO: outros metodos da classe
 
-'''
+"""
 ----------------------------------------------------------------------------------------------
 --------------------------- Funções Auxiliares -----------------------------------------------
 ----------------------------------------------------------------------------------------------
-'''
+"""
+def fillCell(board: Board, action: tuple):
+    """Preencher uma posição no tabuleiro"""
+
+    row = action[0]
+    col = action[1]
+    move = action[2]
+
+    if (move == 'w'):
+        board.table[row][col] = '.'
+    else:
+        board.table[row][col] = move
+
+    return board
+
+def countEmptyCells(board: Board):
+    count = 0
+    for i in range(len(board.row)):
+        for j in range(len(board.col)):
+            if (isNone(board, i, j)):
+                count += 1
+    return count
+
+def countShipGroups(board: Board):
+    count = 0
+    # To do
+    return count
 
 def checkForCompletedLines(board: Board):
-    '''Assegura que linhas ou colunas completas com peças de navios sejam preenchidas com água'''
+    """Assegura que linhas ou colunas completas com peças de navios sejam preenchidas com água"""
     
     for i in range(len(board.row)):
         pieces = countRowShipPieces(board, i)
         if (board.row[i] == pieces):
             for j in range(len(board.col)):
                 if (isNone(board, i, j)):
-                    board.table[i][j] = '.'
+                    fillCell(board, (i, j, 'w'))
 
     for i in range(len(board.col)):
         pieces = countColShipPieces(board, i)
         if (board.col[i] == pieces):
             for j in range(len(board.row)):
                 if (isNone(board, j, i)):
-                    board.table[j][i] = '.'
+                    fillCell(board, (j, i, 'w'))
     return board
 
 def countRowShipPieces(board: Board, row: int):
@@ -201,13 +228,13 @@ def isShipPiece(sample: str):
     return True
 
 def isNone(board: Board, row: int, col: int):
-    return board.table[row][col] == "~"
+    return board.table[row][col] == '~'
 
-'''
+"""
 ----------------------------------------------------------------------------------------------
 ---------------------------------- Função Main -----------------------------------------------
 ----------------------------------------------------------------------------------------------
-'''
+"""
 
 if __name__ == "__main__":
     # TODO:
@@ -216,6 +243,8 @@ if __name__ == "__main__":
     # Retirar a solução a partir do nó resultante,
     # Imprimir para o standard output no formato indicado.
 
+    """
+    # EXEMPLO TESTE
     board = Board.parse_instance()
 
     print(board.row)
@@ -245,12 +274,41 @@ if __name__ == "__main__":
 
     print(problem.actions(second_st))
 
+    print('\n')
+
     second_st.board.print()
+    """
+    """
+    # EXEMPLO 1
+    # Ler a instância a partir do ficheiro 'i1.txt' (Figura 1):
+    # $ python3 bimaru.py < i1.txt
+    board = Board.parse_instance()
+    # Imprimir valores adjacentes
+    print(board.adjacent_vertical_values(3, 3))
+    print(board.adjacent_horizontal_values(3, 3))
+    print(board.adjacent_vertical_values(1, 0))
+    print(board.adjacent_horizontal_values(1, 0))
+    """
 
+    # EXEMPLO 2
+    board = Board.parse_instance()
+    # Criar uma instância de Bimaru:
+    problem = Bimaru(board)
+    # Criar um estado com a configuração inicial:
+    initial_state = BimaruState(board)
+    # Mostrar valor na posição (3, 3):
+    print(initial_state.board.get_value(3, 3))
+    # Realizar acção de inserir o valor w (água) na posição da linha 3 e coluna 3
+    result_state = problem.result(initial_state, (3, 3, 'w'))
+    # Mostrar valor na posição (3, 3):
+    print(result_state.board.get_value(3, 3))
+    print(problem.goal_test(result_state))
 
-    '''
-    print(Board.get_value(b, 9, 9))
-    print(Board.adjacent_vertical_values(b, 9, 8))
-    print(Board.adjacent_horizontal_values(b, 6, 0))
-    '''
-    pass
+    result_state.board.print()
+
+    goal_node = breadth_first_tree_search(problem)
+
+    print("Is goal?", problem.goal_test(goal_node.state)) # WRONG
+    print("Solution:\n")
+    goal_node.state.board.print()
+
