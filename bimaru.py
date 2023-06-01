@@ -7,7 +7,7 @@
 # 99192 Cláudio Cohen Campos
 
 import sys
-# import copy - can we use this?
+import copy
 from search import (
     Problem,
     Node,
@@ -30,6 +30,7 @@ class BimaruState:
         return self.id < other.id
 
     # TODO: outros metodos da classe
+
 
 
 class Board:
@@ -61,6 +62,45 @@ class Board:
         
         return tuple([self.get_value(row, col - 1) if col > 0 else None,
                       self.get_value(row, col + 1) if (col < len(self.row) - 1) else None])
+
+    def fillCell(self, row: int, col: int, move: str):
+        """Preenche uma posição no tabuleiro"""
+
+        if (not self.insideBoardLimits(row, col)): return
+        
+        if (move == 'w'):
+            self.table[row][col] = '.'
+        else:
+            self.table[row][col] = move
+
+        return
+    
+    def copy(self):
+        """Copia os atributos de Board para uma nova referência Board"""
+
+        row_copy = self.row.copy()
+        col_copy = self.col.copy()
+        hints_copy = []
+        table_copy = []
+
+        for hint in self.hints:
+            hints_copy.append(hint.copy())
+
+        for row in self.table: 
+            table_copy.append(row.copy())
+
+        return Board(row_copy, col_copy, hints_copy, table_copy)
+
+    def insideBoardLimits(self, row: int, col: int):
+         """Inspeciona limites da tabela"""
+         return row >= 0 and col >= 0 and row < len(self.row) and col < len(self.col)
+    
+    def print(self):
+        """Imprime a visualização externa de um tabuleiro Board"""
+        for i in range(len(self.table)):
+            for j in range(len(self.table[0])):
+                print(self.table[i][j], end = '')
+            print('\n')
 
     @staticmethod
     def parse_instance():
@@ -98,18 +138,11 @@ class Board:
             hint_raw = sys.stdin.readline().strip()
             hint_values = hint_raw.split("\t")[1:]
             hint_values = [int(val) if val.isnumeric() else val for val in hint_values]
-            table[hint_values[0]][hint_values[1]] = hint_values[2]
             hints.append(hint_values)
+            table[hint_values[0]][hint_values[1]] = hint_values[2]
         
         return Board(row, col, hints, table)
 
-
-    def print(self):
-        """Imprime a visualização externa de um tabuleiro Board"""
-        for i in range(len(self.table)):
-            for j in range(len(self.table[0])):
-                print(self.table[i][j], end = '')
-            print('\n')
 
 
 class Bimaru(Problem):
@@ -120,15 +153,14 @@ class Bimaru(Problem):
     def actions(self, state: BimaruState):
         """Retorna uma lista de ações que podem ser executadas a
         partir do estado passado como argumento."""
-        board_filled = checkForCompletedLines(state.board) # Altera destrutivamente a tabela (passado por referência?)
-        # To do: Check for ship adjancences
+        result_board = fitLargestBoat(state.board.copy())
+        #countShipGroups(state.board)
         moves = []
-        for i in range(len(board_filled.row)):
-            for j in range(len(board_filled.col)):
-                if (isNone(board, i, j)):
+        for i in range(len(result_board.row)):
+            for j in range(len(result_board.col)):
+                if (isNone(result_board, i, j)):
                     for c in "wm": # 'm': middle, 'w': water, só pode preencher com estes símbolos
                       moves.append(tuple([i, j, c]))
-        print(moves)
         return moves
                 
 
@@ -137,14 +169,20 @@ class Bimaru(Problem):
         'state' passado como argumento. A ação a executar deve ser uma
         das presentes na lista obtida pela execução de
         self.actions(state)."""
-        board_played = fillCell(state.board, action)
+        board_played = state.board.copy()
+
+        row = action[0]
+        col = action[1]
+        move = action[2]
+
+        board_played.fillCell(row, col, move)
         return BimaruState(board_played)
 
     def goal_test(self, state: BimaruState):
         """Retorna True se e só se o estado passado como argumento é
         um estado objetivo. Deve verificar se todas as posições do tabuleiro
         estão preenchidas de acordo com as regras do problema."""
-        return countEmptyCells(state.board) == 0 # To change
+        return countEmptyCells(state.board) == 0
 
     def h(self, node: Node):
         """Função heuristica utilizada para a procura A*."""
@@ -158,19 +196,81 @@ class Bimaru(Problem):
 --------------------------- Funções Auxiliares -----------------------------------------------
 ----------------------------------------------------------------------------------------------
 """
-def fillCell(board: Board, action: tuple):
-    """Preencher uma posição no tabuleiro"""
 
-    row = action[0]
-    col = action[1]
-    move = action[2]
+def countShipGroups(board: Board):
+    count = 0
+    # To do
+    return count
 
-    if (move == 'w'):
-        board.table[row][col] = '.'
-    else:
-        board.table[row][col] = move
+def fitLargestBoat(board: Board):
+    
+    fillCompletedLines(board) # Altera destrutivamente a tabela (passado por referência?)
+    fillAdjacents(board)
 
     return board
+
+def fillAdjacents(board: Board):
+
+    for i in range(len(board.row)):
+        for j in range(len(board.col)):
+            if (board.get_value(i, j) != None and board.get_value(i, j) in "TMLRBCtmlrbc"):
+
+                if (board.get_value(i, j) in "Tt"):
+                    for i_offset in [-1, 0, 1]:
+                        for j_offset in [-1, 1]:
+                            board.fillCell(i + i_offset, j + j_offset, 'w')
+                    board.fillCell(i - 1, j, "w")
+
+                if (board.get_value(i, j) in "Mm"):
+                    for i_offset in [-1, 1]:
+                        for j_offset in [-1, 1]:
+                            board.fillCell(i + i_offset, j + j_offset, 'w')
+
+                if (board.get_value(i, j) in "Ll"):
+                    for i_offset in [-1, 1]:
+                        for j_offset in [-1, 0, 1]:
+                            board.fillCell(i + i_offset, j + j_offset, 'w')
+                    board.fillCell(i , j - 1, "w")
+
+                if (board.get_value(i, j) in "Rr"):
+                    for i_offset in [-1, 1]:
+                        for j_offset in [-1, 0, 1]:
+                            board.fillCell(i + i_offset, j + j_offset, 'w')
+                    board.fillCell(i , j + 1, "w")
+
+
+                if (board.get_value(i, j) in "Bb"):
+                    for i_offset in [-1, 0, 1]:
+                        for j_offset in [-1, 1]:
+                            board.fillCell(i + i_offset, j + j_offset, 'w')
+                    board.fillCell(i + 1, j, "w")
+
+                if (board.get_value(i, j) in "Cc"):
+                    for i_offset in [-1, 0, 1]:
+                        for j_offset in [-1, 0, 1]:
+                            if (i_offset == 0 and j_offset == 0): continue
+                            board.fillCell(i + i_offset, j + j_offset, 'w')
+    return
+
+def fillCompletedLines(board: Board):
+    """Assegura que linhas ou colunas completas com peças de navios sejam preenchidas com água"""
+    
+    # Verifica para cada linha da tabela
+    for i in range(len(board.row)):
+        pieces = countRowShipPieces(board, i)
+        if (board.row[i] == pieces):
+            for j in range(len(board.col)):
+                if (isNone(board, i, j)):
+                    board.fillCell(i, j, 'w')
+
+    # Verifica para cada coluna da tabela
+    for i in range(len(board.col)):
+        pieces = countColShipPieces(board, i)
+        if (board.col[i] == pieces):
+            for j in range(len(board.row)):
+                if (isNone(board, j, i)):
+                    board.fillCell(j, i, 'w')
+    return
 
 def countEmptyCells(board: Board):
     count = 0
@@ -179,29 +279,6 @@ def countEmptyCells(board: Board):
             if (isNone(board, i, j)):
                 count += 1
     return count
-
-def countShipGroups(board: Board):
-    count = 0
-    # To do
-    return count
-
-def checkForCompletedLines(board: Board):
-    """Assegura que linhas ou colunas completas com peças de navios sejam preenchidas com água"""
-    
-    for i in range(len(board.row)):
-        pieces = countRowShipPieces(board, i)
-        if (board.row[i] == pieces):
-            for j in range(len(board.col)):
-                if (isNone(board, i, j)):
-                    fillCell(board, (i, j, 'w'))
-
-    for i in range(len(board.col)):
-        pieces = countColShipPieces(board, i)
-        if (board.col[i] == pieces):
-            for j in range(len(board.row)):
-                if (isNone(board, j, i)):
-                    fillCell(board, (j, i, 'w'))
-    return board
 
 def countRowShipPieces(board: Board, row: int):
     
@@ -290,25 +367,31 @@ if __name__ == "__main__":
     print(board.adjacent_horizontal_values(1, 0))
     """
 
-    # EXEMPLO 2
     board = Board.parse_instance()
-    # Criar uma instância de Bimaru:
+
     problem = Bimaru(board)
-    # Criar um estado com a configuração inicial:
-    initial_state = BimaruState(board)
-    # Mostrar valor na posição (3, 3):
-    print(initial_state.board.get_value(3, 3))
-    # Realizar acção de inserir o valor w (água) na posição da linha 3 e coluna 3
-    result_state = problem.result(initial_state, (3, 3, 'w'))
-    # Mostrar valor na posição (3, 3):
-    print(result_state.board.get_value(3, 3))
-    print(problem.goal_test(result_state))
+
+    orig_state = problem.initial
+
+    result_state = problem.result(orig_state, (1,1,'w'))
+    
+    print(problem.actions(orig_state))
+
+    print("Actions to perform:", len(problem.actions(orig_state)))
+
+    print('\nThis board table is supposed to remain unchanged:\n')
+
+    orig_state.board.print()
+
+    print("\nBoard table after the result\n")
 
     result_state.board.print()
+    """                                                 SEARCH ALGOS NOT WORKING YET (WHEN IN USE PROGRAM NEVER ENDS)
+    goal_state = breadth_first_tree_search(problem)
 
-    goal_node = breadth_first_tree_search(problem)
+    print("\nBFS table result:\n")
 
-    print("Is goal?", problem.goal_test(goal_node.state)) # WRONG
-    print("Solution:\n")
-    goal_node.state.board.print()
+    goal_state.state.board.print()
 
+    print("\nIs goal?", problem.goal_test(goal_state.state))
+    """
