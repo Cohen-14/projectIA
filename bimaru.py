@@ -7,7 +7,6 @@
 # 99192 Cláudio Cohen Campos
 
 import sys
-import copy
 from search import (
     Problem,
     Node,
@@ -64,9 +63,10 @@ class Board:
                       self.get_value(row, col + 1) if (col < len(self.row) - 1) else None])
 
     def fillCell(self, row: int, col: int, move: str):
-        """Preenche uma posição no tabuleiro"""
+        """Preenche uma posição no tabuleiro, a posição a preencher está vazia inicialmente (None)"""
 
         if (not self.insideBoardLimits(row, col)): return
+        if (self.get_value(row, col) != None): return
         
         if (move == 'w'):
             self.table[row][col] = '.'
@@ -153,7 +153,7 @@ class Bimaru(Problem):
     def actions(self, state: BimaruState):
         """Retorna uma lista de ações que podem ser executadas a
         partir do estado passado como argumento."""
-        result_board = fitLargestBoat(state.board.copy())
+        result_board = checkLargestBoat(state.board.copy())
         #countShipGroups(state.board)
         moves = []
         for i in range(len(result_board.row)):
@@ -163,7 +163,6 @@ class Bimaru(Problem):
                       moves.append(tuple([i, j, c]))
         return moves
                 
-
     def result(self, state: BimaruState, action):
         """Retorna o estado resultante de executar a 'action' sobre
         'state' passado como argumento. A ação a executar deve ser uma
@@ -202,12 +201,17 @@ def countShipGroups(board: Board):
     # To do
     return count
 
-def fitLargestBoat(board: Board):
+def checkLargestBoat(board: Board):
     
-    fillCompletedLines(board) # Altera destrutivamente a tabela (passado por referência?)
+    fillCompletedLines(board)
     fillAdjacents(board)
 
+
     return board
+
+def fillLargestBoat(board: Board):
+
+    pass
 
 def fillAdjacents(board: Board):
 
