@@ -99,6 +99,11 @@ class Node:
     def child_node(self, problem, action):
         """[Figure 3.10]"""
         next_state = problem.result(self.state, action)
+        print("\nNode:", next_state.id)
+        next_state.board.print()
+        print("Boats remaining:", next_state.board.boats_remaining)
+        print("Actions list:", problem.actions(self.state))
+        print("**", len(problem.actions(self.state)), "actions to choose from **\n")
         next_node = Node(next_state, self, action, problem.path_cost(self.path_cost, self.state, action, next_state))
         return next_node
 
@@ -191,7 +196,7 @@ def breadth_first_tree_search(problem):
         if problem.goal_test(node.state):
             return node
         frontier.extend(node.expand(problem))
-    return None
+    return node
 
 
 def depth_first_tree_search(problem):
@@ -204,13 +209,14 @@ def depth_first_tree_search(problem):
     """
 
     frontier = [Node(problem.initial)]  # Stack
-
     while frontier:
         node = frontier.pop()
+        if (len(node.state.board.boats_remaining) == 0):
+            print("What's up?", node.state.board.boats_remaining)
         if problem.goal_test(node.state):
             return node
         frontier.extend(node.expand(problem))
-    return None
+    return node
 
 
 def depth_first_graph_search(problem):
@@ -284,7 +290,7 @@ def best_first_graph_search(problem, f, display=False):
                 if f(child) < frontier[child]:
                     del frontier[child]
                     frontier.append(child)
-    return None
+    return node
 
 
 def uniform_cost_search(problem, display=False):

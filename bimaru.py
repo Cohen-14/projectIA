@@ -34,11 +34,12 @@ class BimaruState:
 
 class Board:
     """Representação interna de um tabuleiro de Bimaru."""
-    def __init__(self, row, col, hints, table):
+    def __init__(self, row, col, hints, table, boats_remaining):
         self.row = row
         self.col = col
         self.hints = hints
         self.table = table
+        self.boats_remaining = boats_remaining
 
     def get_value(self, row: int, col: int) -> str:
         """Devolve o valor na respetiva posição do tabuleiro."""
@@ -61,6 +62,11 @@ class Board:
         
         return tuple([self.get_value(row, col - 1) if col > 0 else None,
                       self.get_value(row, col + 1) if (col < len(self.row) - 1) else None])
+    
+    def nBoatsOfSize(boat_size: int):
+        """Verifica quantos barcos de tamanho 'boat_size' estão presentes na tabela"""
+
+        
 
     def fillCell(self, row: int, col: int, move: str):
         """Preenche uma posição no tabuleiro, a posição a preencher está vazia inicialmente (None)"""
@@ -82,6 +88,7 @@ class Board:
         col_copy = self.col.copy()
         hints_copy = []
         table_copy = []
+        boats_remaining_copy = []
 
         for hint in self.hints:
             hints_copy.append(hint.copy())
@@ -89,7 +96,10 @@ class Board:
         for row in self.table: 
             table_copy.append(row.copy())
 
-        return Board(row_copy, col_copy, hints_copy, table_copy)
+        for boat in self.boats_remaining: 
+            boats_remaining_copy.append(boat.copy())
+
+        return Board(row_copy, col_copy, hints_copy, table_copy, boats_remaining_copy)
 
     def insideBoardLimits(self, row: int, col: int):
          """Inspeciona limites da tabela"""
@@ -117,6 +127,7 @@ class Board:
         col = []
         hints = []
         table = []
+        boats_remaining = [[1, 1, 1, 1], [2, 2, 2], [3, 3], [4]]
 
         row_raw = sys.stdin.readline().strip()
         row_values = row_raw.split("\t")[1:]   
@@ -140,8 +151,12 @@ class Board:
             hint_values = [int(val) if val.isnumeric() else val for val in hint_values]
             hints.append(hint_values)
             table[hint_values[0]][hint_values[1]] = hint_values[2]
+
+            # Tratar de imediato os casos dos barcos de tamanho 1
+            if (hint_values[2] == 'C'):
+                boats_remaining[0].pop()
         
-        return Board(row, col, hints, table)
+        return Board(row, col, hints, table, boats_remaining)
 
 
 
@@ -153,14 +168,7 @@ class Bimaru(Problem):
     def actions(self, state: BimaruState):
         """Retorna uma lista de ações que podem ser executadas a
         partir do estado passado como argumento."""
-        result_board = checkLargestBoat(state.board.copy())
-        #countShipGroups(state.board)
-        moves = []
-        for i in range(len(result_board.row)):
-            for j in range(len(result_board.col)):
-                if (isNone(result_board, i, j)):
-                    for c in "wm": # 'm': middle, 'w': water, só pode preencher com estes símbolos
-                      moves.append(tuple([i, j, c]))
+        moves = checkLargestBoat(state.board.copy())
         return moves
                 
     def result(self, state: BimaruState, action):
@@ -169,19 +177,14 @@ class Bimaru(Problem):
         das presentes na lista obtida pela execução de
         self.actions(state)."""
         board_played = state.board.copy()
-
-        row = action[0]
-        col = action[1]
-        move = action[2]
-
-        board_played.fillCell(row, col, move)
+        fillLargestBoat(board_played, action) # board_played passado por referência
         return BimaruState(board_played)
 
     def goal_test(self, state: BimaruState):
         """Retorna True se e só se o estado passado como argumento é
         um estado objetivo. Deve verificar se todas as posições do tabuleiro
         estão preenchidas de acordo com as regras do problema."""
-        return countEmptyCells(state.board) == 0
+        return len(state.board.boats_remaining) == 0 and countEmptyCells(state.board) == 0
 
     def h(self, node: Node):
         """Função heuristica utilizada para a procura A*."""
@@ -196,22 +199,143 @@ class Bimaru(Problem):
 ----------------------------------------------------------------------------------------------
 """
 
-def countShipGroups(board: Board):
-    count = 0
-    # To do
-    return count
-
 def checkLargestBoat(board: Board):
     
     fillCompletedLines(board)
     fillAdjacents(board)
+    largest_boat_yet = removeBoat(board)
 
+    moves = []
 
-    return board
+    # Verificar existência de espaços horizontais para hipóteses de colocação do maior barco até agora
+    for i in range(len(board.row)):
+        count_ship_size = 0
+        for j in range(len(board.col)):
+            if (board.get_value(i, j) in [None] + [c for c in "LRM"]):
 
-def fillLargestBoat(board: Board):
+                if (board.get_value(i, j) == None):
+                    count_ship_size += 1
 
-    pass
+                elif (board.get_value(i, j) == 'L'):
+                    count_ship_size = 1
+
+                elif (board.get_value(i, j) == 'R'):
+                    if (largest_boat_yet >= 2 and count_ship_size == largest_boat_yet - 1):
+                        count_ship_size += 1
+                    else:
+                        count_ship_size = 0
+
+                elif (board.get_value(i, j) == 'M' and
+                      board.adjacent_horizontal_values(i, j)[0] != '.' and
+                      board.adjacent_horizontal_values(i, j)[1] != '.' and
+                      j != 0 and j!= len(board.col) -1
+                      ):
+                      count_ship_size += 1
+
+                if (largest_boat_yet == 4 and
+                    count_ship_size >= 4 and
+                    board.row[i] - countRowShipPieces(board, i) >= 4
+                    ):
+                    moves.append([(i, j - 3, 'l'), (i, j - 2, 'm'), (i, j - 1, 'm'), (i, j, 'r')])
+
+                elif (largest_boat_yet == 3 and
+                      count_ship_size >= 3 and
+                      board.row[i] - countRowShipPieces(board, i) >= 3
+                      ):
+                      moves.append([(i, j - 2, 'l'), (i, j - 1, 'm'), (i, j, 'r')])
+                          
+                elif (largest_boat_yet == 2 and
+                      count_ship_size >= 2 and
+                      board.row[i] - countRowShipPieces(board, i) >= 2
+                      ):
+                      moves.append([(i, j - 1, 'l'), (i, j, 'r')])
+
+                elif (largest_boat_yet == 1 and
+                      count_ship_size >= 1 and
+                      board.row[i] - countRowShipPieces(board, i) >= 1 and
+                      board.adjacent_horizontal_values(i, j)[0] == 'w' and
+                      board.adjacent_horizontal_values(i, j)[1] == 'w' and
+                      board.adjacent_vertical_values(i, j)[0] == 'w' and
+                      board.adjacent_vertical_values(i, j)[1] == 'w'
+                      ):
+                      moves.append([(i, j, 'c')])     
+            else:
+                count_ship_size = 0
+    
+    # Verificar existência de espaços verticais para hipóteses de colocação do maior barco até agora
+    for i in range(len(board.col)):
+        count_ship_size = 0
+        for j in range(len(board.row)):
+            if (board.get_value(j, i) in [None] + [c for c in "TBM"]):
+
+                if (board.get_value(j, i) == None):
+                    count_ship_size += 1
+
+                elif (board.get_value(j, i) == 'T'):
+                    count_ship_size = 1
+
+                elif (largest_boat_yet >= 2 and board.get_value(j, i) == 'B'):
+                    if (count_ship_size == largest_boat_yet - 1):
+                        count_ship_size += 1
+                    else:
+                        count_ship_size = 0
+
+                elif (board.get_value(j, i) == 'M' and 
+                      board.adjacent_vertical_values(j, i)[0] != '.' and
+                      board.adjacent_vertical_values(j, i)[1] != '.' and
+                      j != 0 and j!= len(board.row) - 1
+                      ):
+                      count_ship_size += 1
+
+                if (largest_boat_yet == 4 and
+                    count_ship_size >= 4 and
+                    board.col[i] - countColShipPieces(board, i) >= 4):
+                        moves.append([(j - 3, i, 't'), (j - 2, i, 'm'), (j - 1, i, 'm'), (j, i, 'b')])
+
+                elif (largest_boat_yet == 3 and
+                      count_ship_size >= 3 and
+                      board.col[i] - countColShipPieces(board, i) >= 3
+                      ):
+                      moves.append([(j - 2, i, 't'), (j - 1, i, 'm'), (j, i, 'b')])
+
+                elif (largest_boat_yet == 2 and
+                      count_ship_size >= 2 and
+                      board.col[i] - countColShipPieces(board, i) >= 2
+                      ):
+                      moves.append([(j - 1, i, 't'), (j, i, 'b')])
+
+                elif (largest_boat_yet == 1 and
+                      count_ship_size >= 1 and
+                      board.col[i] - countColShipPieces(board, i) >= 1 and
+                      board.adjacent_horizontal_values(j, i)[0] == 'w' and
+                      board.adjacent_horizontal_values(j, i)[1] == 'w' and
+                      board.adjacent_vertical_values(j, i)[0] == 'w' and
+                      board.adjacent_vertical_values(j, i)[1] == 'w'
+                      ):
+                      moves.append([(j, i, 'c')])
+            else:
+                count_ship_size = 0
+
+    return moves
+
+def fillLargestBoat(board: Board, boat):
+
+    for move in boat:
+
+        row = move[0]
+        col = move[1]
+        step = move[2]
+
+        if (board.table[row][col].isupper()): continue
+        
+        board.fillCell(row, col, step)
+    
+    fillCompletedLines(board)
+    fillAdjacents(board)
+    removeBoat(board)
+    
+    return
+    
 
 def fillAdjacents(board: Board):
 
@@ -225,31 +349,30 @@ def fillAdjacents(board: Board):
                             board.fillCell(i + i_offset, j + j_offset, 'w')
                     board.fillCell(i - 1, j, "w")
 
-                if (board.get_value(i, j) in "Mm"):
+                elif (board.get_value(i, j) in "Mm"):
                     for i_offset in [-1, 1]:
                         for j_offset in [-1, 1]:
                             board.fillCell(i + i_offset, j + j_offset, 'w')
 
-                if (board.get_value(i, j) in "Ll"):
+                elif (board.get_value(i, j) in "Ll"):
                     for i_offset in [-1, 1]:
                         for j_offset in [-1, 0, 1]:
                             board.fillCell(i + i_offset, j + j_offset, 'w')
                     board.fillCell(i , j - 1, "w")
 
-                if (board.get_value(i, j) in "Rr"):
+                elif (board.get_value(i, j) in "Rr"):
                     for i_offset in [-1, 1]:
                         for j_offset in [-1, 0, 1]:
                             board.fillCell(i + i_offset, j + j_offset, 'w')
                     board.fillCell(i , j + 1, "w")
 
-
-                if (board.get_value(i, j) in "Bb"):
+                elif (board.get_value(i, j) in "Bb"):
                     for i_offset in [-1, 0, 1]:
                         for j_offset in [-1, 1]:
                             board.fillCell(i + i_offset, j + j_offset, 'w')
                     board.fillCell(i + 1, j, "w")
 
-                if (board.get_value(i, j) in "Cc"):
+                elif (board.get_value(i, j) in "Cc"):
                     for i_offset in [-1, 0, 1]:
                         for j_offset in [-1, 0, 1]:
                             if (i_offset == 0 and j_offset == 0): continue
@@ -258,7 +381,7 @@ def fillAdjacents(board: Board):
 
 def fillCompletedLines(board: Board):
     """Assegura que linhas ou colunas completas com peças de navios sejam preenchidas com água"""
-    
+
     # Verifica para cada linha da tabela
     for i in range(len(board.row)):
         pieces = countRowShipPieces(board, i)
@@ -275,6 +398,20 @@ def fillCompletedLines(board: Board):
                 if (isNone(board, j, i)):
                     board.fillCell(j, i, 'w')
     return
+
+def removeBoat(board: Board):
+
+    no_boats = 0
+
+    if (len(board.boats_remaining) == 0): 
+        return no_boats
+
+    if (len(board.boats_remaining[-1]) == 0):
+        board.boats_remaining.pop()
+
+    last_boat = board.boats_remaining[-1].pop()
+
+    return last_boat
 
 def countEmptyCells(board: Board):
     count = 0
@@ -377,20 +514,22 @@ if __name__ == "__main__":
 
     orig_state = problem.initial
 
-    result_state = problem.result(orig_state, (1,1,'w'))
+    #result_state = problem.result(orig_state, [(1,1,'w')])
     
-    print(problem.actions(orig_state))
+    #print(problem.actions(orig_state))
 
-    print("Actions to perform:", len(problem.actions(orig_state)))
+    #print("Actions to perform:", len(problem.actions(orig_state)))
 
     print('\nThis board table is supposed to remain unchanged:\n')
 
     orig_state.board.print()
 
-    print("\nBoard table after the result\n")
+    print(orig_state.board.table[7][8])
 
-    result_state.board.print()
-    """                                                 SEARCH ALGOS NOT WORKING YET (WHEN IN USE PROGRAM NEVER ENDS)
+    #print("\nBoard table after the result\n")
+
+    #result_state.board.print()
+    #                                                SEARCH ALGOS NOT WORKING YET (WHEN IN USE PROGRAM NEVER ENDS)
     goal_state = breadth_first_tree_search(problem)
 
     print("\nBFS table result:\n")
@@ -398,4 +537,8 @@ if __name__ == "__main__":
     goal_state.state.board.print()
 
     print("\nIs goal?", problem.goal_test(goal_state.state))
-    """
+
+    print(goal_state.state.board.table[8][7])
+
+    print(goal_state.state.board.boats_remaining, len(goal_state.state.board.boats_remaining))
+    
