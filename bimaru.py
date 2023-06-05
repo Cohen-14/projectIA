@@ -53,15 +53,15 @@ class Board:
         """Devolve os valores imediatamente acima e abaixo,
         respectivamente (Out of bounds -> None)."""
         
-        return tuple([self.get_value(row - 1, col) if (row > 0) and (row < len(self.row) - 1) else None,
-                      self.get_value(row + 1, col) if (row > 0) and (row < len(self.row) - 1) else None])
+        return tuple([self.get_value(row - 1, col) if row > 0 else None,
+                      self.get_value(row + 1, col) if (row < len(self.row) - 1) else None])
 
     def adjacent_horizontal_values(self, row: int, col: int) -> tuple([str, str]):
         """Devolve os valores imediatamente à esquerda e à direita,
         respectivamente (Out of bounds -> None)."""
         
-        return tuple([self.get_value(row, col - 1) if col > 0 and (col < len(self.col) - 1) else None,
-                      self.get_value(row, col + 1) if col > 0 and (col < len(self.col) - 1) else None])
+        return tuple([self.get_value(row, col - 1) if col > 0 else None,
+                      self.get_value(row, col + 1) if (col < len(self.row) - 1) else None])
     
     def nBoatsOfSize(boat_size: int):
         """Verifica quantos barcos de tamanho 'boat_size' estão presentes na tabela"""
@@ -151,10 +151,23 @@ class Board:
             hint_values = [int(val) if val.isnumeric() else val for val in hint_values]
             hints.append(hint_values)
             table[hint_values[0]][hint_values[1]] = hint_values[2]
-
-            # Tratar de imediato os casos dos barcos de tamanho 1
-            if (hint_values[2] == 'C'):
-                boats_remaining[0].pop()
+        
+        for i in range(len(row)):
+            for j in range(len(col)):
+                if (table[i][j] == 'C'):
+                    boats_remaining[0].pop()
+                elif (j < len(col) - 1 and table[i][j] == 'L' and table[i][j + 1] == 'R'):
+                    boats_remaining[1].pop()
+                elif (j < len(col) - 2 and table[i][j] == 'L' and table[i][j + 1] == 'M' and table[i][j + 2] == 'R'):
+                    boats_remaining[2].pop()
+                elif (j < len(col) - 3 and table[i][j] == 'L' and table[i][j + 1] == 'M' and table[i][j + 2] == 'M' and table[i][j + 3] == 'R'):
+                    boats_remaining[3].pop()
+                elif (i < len(row) - 1 and table[i][j] == 'T' and table[i + 1][j] == 'B'):
+                    boats_remaining[1].pop()
+                elif (i < len(row) - 2 and table[i][j] == 'T' and table[i + 1][j] == 'M' and table[i + 2][j] == 'B'):
+                    boats_remaining[2].pop()
+                elif (i < len(row) - 3 and table[i][j] == 'T' and table[i + 1][j] == 'M' and table[i + 2][j] == 'B' and table[i + 3][j] == 'B'):
+                    boats_remaining[3].pop()
         
         return Board(row, col, hints, table, boats_remaining)
 
@@ -164,7 +177,6 @@ class Bimaru(Problem):
     def __init__(self, board: Board):
         """O construtor especifica o estado inicial."""
         self.initial = BimaruState(board)
-        super().__init__(self.initial)
 
     def actions(self, state: BimaruState):
         """Retorna uma lista de ações que podem ser executadas a
@@ -185,17 +197,24 @@ class Bimaru(Problem):
         """Retorna True se e só se o estado passado como argumento é
         um estado objetivo. Deve verificar se todas as posições do tabuleiro
         estão preenchidas de acordo com as regras do problema."""
-        return len(state.board.boats_remaining) == 0 and countEmptyCells(state.board) == 0
+        rowbool = False
+        colbool = False
+        for i in range(len(state.board.row)):
+            if (countRowShipPieces(state.board, i) == state.board.row[i]):
+                rowbool = True
+            else:
+                rowbool = False
+        for j in range(len(state.board.col)):
+            if (countColShipPieces(state.board, j) == state.board.col[j]):
+                colbool = True
+            else:
+                colbool = False
+        return rowbool and colbool and len(state.board.boats_remaining) == 0 and countEmptyCells(state.board) == 0
 
     def h(self, node: Node):
         """Função heuristica utilizada para a procura A*."""
-        options = checkLargestBoat(node.state.board.copy())
-        count = 0
-        for i in options:
-            if len(i) == 1:
-                count += 3
-        return (count)
-
+        # TODO
+        pass
 
     # TODO: outros metodos da classe
 
@@ -216,75 +235,100 @@ def checkLargestBoat(board: Board):
     # Verificar existência de espaços horizontais para hipóteses de colocação do maior barco até agora
     for i in range(len(board.row)):
         count_ship_size = 0
+        boat_piece = ''
         for j in range(len(board.col)):
             if (board.get_value(i, j) in [None] + [c for c in "LRM"]):
 
                 if (board.get_value(i, j) == None):
-                        count_ship_size += 1
+                    count_ship_size += 1
 
                 elif (board.get_value(i, j) == 'L'):
                     count_ship_size = 1
+                    boat_piece += 'L'
 
                 elif (board.get_value(i, j) == 'R'):
                     if (largest_boat_yet >= 2 and count_ship_size == largest_boat_yet - 1):
                         count_ship_size += 1
+                        boat_piece += 'R'
                     else:
-                        count_ship_size = 0
+                        boat_piece += 'R'
 
-                elif (board.get_value(i, j) == 'M'):
-                    if (board.adjacent_horizontal_values(i, j)[0] == '.' or
-                        board.adjacent_horizontal_values(i, j)[1] == '.' or
-                        j == 0 or j == len(board.col) - 1
-                        ):
-                        board.fillCell(i, j - 1, 'w')
-                        board.fillCell(i, j + 1, 'w')
-                        count_ship_size = 0
-                    else:
-                        count_ship_size += 1
+                elif (board.get_value(i, j) == 'M' and
+                      board.adjacent_horizontal_values(i, j)[0] != '.' and
+                      board.adjacent_horizontal_values(i, j)[1] != '.' and
+                      j != 0 and j!= len(board.col) -1
+                      ):
+                      count_ship_size += 1
+                      boat_piece += 'M'
 
                 if (largest_boat_yet == 4 and
-                    count_ship_size >= 4
+                    count_ship_size >= 4 and
+                    board.row[i] - countRowShipPieces(board, i) + len(boat_piece) >= 4
                     ):
-                    if (board.adjacent_horizontal_values(i, j - 4)[0] == 'L' or
-                        board.adjacent_horizontal_values(i, j - 3)[0] == 'L' or
-                        board.adjacent_horizontal_values(i, j + 1)[1] == 'R' or
-                        board.adjacent_horizontal_values(i, j)[1] == 'R'
-                        ):
-                        continue
-                    if (board.row[i] - countRowShipPieces(board, i) >= 3):
-                        moves.append([(i, j - 3, 'l'), (i, j - 2, 'm'), (i, j - 1, 'm'), (i, j, 'r')])
+                    moves.append([(i, j - 3, 'l'), (i, j - 2, 'm'), (i, j - 1, 'm'), (i, j, 'r')])
+
+                elif (largest_boat_yet == 4 and
+                    count_ship_size == 4 and
+                    boat_piece == 'L' and
+                    board.row[i] - countRowShipPieces(board, i) + len(boat_piece) >= 4):
+                        moves.append([(i, j- 2, 'm'), (i, j - 1, 'm'), (i, j, 'r')])
+                        count_ship_size = 0
+                        boat_piece = ''
 
                 elif (largest_boat_yet == 3 and
-                      count_ship_size >= 3
+                      count_ship_size >= 3 and
+                      board.row[i] - countRowShipPieces(board, i) + len(boat_piece) >= 3
                       ):
-                      if (board.adjacent_horizontal_values(i, j - 3)[0] == 'L' or
-                        board.adjacent_horizontal_values(i, j - 2)[0] == 'L' or
-                        board.adjacent_horizontal_values(i, j + 1)[1] == 'R' or
-                        board.adjacent_horizontal_values(i, j)[1] == 'R'
-                        ):
-                        continue
-                      if (board.row[i] - countRowShipPieces(board, i) >= 2):
-                          moves.append([(i, j - 2, 'l'), (i, j - 1, 'm'), (i, j, 'r')])
+                      moves.append([(i, j - 2, 'l'), (i, j - 1, 'm'), (i, j, 'r')])
+
+                elif (largest_boat_yet == 3 and
+                      count_ship_size >= 3 and
+                      boat_piece == 'M' and
+                      board.row[i] - countRowShipPieces(board, i) + len(boat_piece) >= 3
+                      ):
+                      moves.append([(i, j - 2, 'l'), (i, j, 'r')])
+
+                elif (largest_boat_yet == 3 and
+                      count_ship_size >= 3 and
+                      boat_piece == 'L' and
+                      board.row[i] - countRowShipPieces(board, i) + len(boat_piece) >= 3
+                      ):
+                      moves.append([(i, j - 1, 'm'), (i, j, 'r')])
+
+                elif (largest_boat_yet == 3 and
+                      count_ship_size >= 3 and
+                      boat_piece == 'R' and
+                      board.row[i] - countRowShipPieces(board, i) + len(boat_piece) >= 3
+                      ):
+                      moves.append([(i, j - 2, 'l'), (i, j-1, 'm')])
                           
                 elif (largest_boat_yet == 2 and
-                      count_ship_size >= 2
+                      count_ship_size >= 2 and
+                      board.row[i] - countRowShipPieces(board, i) + len(boat_piece) >= 2
                       ):
-                      if (board.adjacent_horizontal_values(i, j - 2)[0] == 'L' or
-                        board.adjacent_horizontal_values(i, j - 1)[0] == 'L' or
-                        board.adjacent_horizontal_values(i, j + 1)[1] == 'R' or
-                        board.adjacent_horizontal_values(i, j)[1] == 'R'
-                        ):
-                        continue
-                      if (board.row[i] - countRowShipPieces(board, i) >= 1):
-                          moves.append([(i, j - 1, 'l'), (i, j, 'r')])
+                      moves.append([(i, j - 1, 'l'), (i, j, 'r')])
+
+                elif (largest_boat_yet == 2 and
+                      count_ship_size >= 2 and
+                      boat_piece == 'L' and
+                      board.row[i] - countRowShipPieces(board, i) + len(boat_piece) >= 2
+                      ):
+                      moves.append([(i, j, 'r')])
+                
+                elif (largest_boat_yet == 2 and
+                      count_ship_size >= 2 and
+                      boat_piece == 'R' and
+                      board.row[i] - countRowShipPieces(board, i) + len(boat_piece) >= 2
+                      ):
+                      moves.append([(i, j - 1, 'l')])
 
                 elif (largest_boat_yet == 1 and
                       count_ship_size >= 1 and
-                      board.row[i] - countRowShipPieces(board, i) >= 0 and
-                      board.adjacent_horizontal_values(i, j)[0] == 'w' and
-                      board.adjacent_horizontal_values(i, j)[1] == 'w' and
-                      board.adjacent_vertical_values(i, j)[0] == 'w' and
-                      board.adjacent_vertical_values(i, j)[1] == 'w'
+                      board.row[i] - countRowShipPieces(board, i) >= 1 and
+                      board.adjacent_horizontal_values(i, j)[0] in [None,'w'] and
+                      board.adjacent_horizontal_values(i, j)[1] in [None,'w'] and
+                      board.adjacent_vertical_values(i, j)[0] in [None,'w'] and
+                      board.adjacent_vertical_values(i, j)[1] in [None,'w']
                       ):
                       moves.append([(i, j, 'c')])     
             else:
@@ -293,6 +337,7 @@ def checkLargestBoat(board: Board):
     # Verificar existência de espaços verticais para hipóteses de colocação do maior barco até agora
     for i in range(len(board.col)):
         count_ship_size = 0
+        boat_piece = ''
         for j in range(len(board.row)):
             if (board.get_value(j, i) in [None] + [c for c in "TBM"]):
 
@@ -301,71 +346,97 @@ def checkLargestBoat(board: Board):
 
                 elif (board.get_value(j, i) == 'T'):
                     count_ship_size = 1
+                    boat_piece += 'T'
 
                 elif (largest_boat_yet >= 2 and board.get_value(j, i) == 'B'):
                     if (count_ship_size == largest_boat_yet - 1):
                         count_ship_size += 1
+                        boat_piece += 'B'
                     else:
-                        count_ship_size = 0
+                        boat_piece += 'B'
 
-                elif (board.get_value(j, i) == 'M'):
-                    if (board.adjacent_vertical_values(j, i)[0] == '.' or
-                        board.adjacent_vertical_values(j, i)[1] == '.' or
-                        j == 0 or j == len(board.row) - 1
-                        ):
-                        board.fillCell(j - 1, i, 'w')
-                        board.fillCell(j + 1, i, 'w')
-                        count_ship_size = 0
-                    else:
-                        count_ship_size += 1
+                elif (board.get_value(j, i) == 'M' and 
+                      board.adjacent_vertical_values(j, i)[0] != '.' and
+                      board.adjacent_vertical_values(j, i)[1] != '.' and
+                      j != 0 and j!= len(board.row) - 1
+                      ):
+                      count_ship_size += 1
+                      boat_piece += 'M'
 
                 if (largest_boat_yet == 4 and
-                    count_ship_size >= 4
-                    ):
-                    if (board.adjacent_vertical_values(j - 4, i)[0] == 'T' or
-                        board.adjacent_vertical_values(j - 3, i)[0] == 'T' or
-                        board.adjacent_vertical_values(j + 1, i)[1] == 'B' or
-                        board.adjacent_vertical_values(j, i)[1] == 'B'
-                        ):
-                        continue
-                    if (board.col[i] - countColShipPieces(board, i) >= 3):                     
+                    count_ship_size >= 4 and
+                    boat_piece == '' and
+                    board.col[i] - countColShipPieces(board, i) >= 4):
                         moves.append([(j - 3, i, 't'), (j - 2, i, 'm'), (j - 1, i, 'm'), (j, i, 'b')])
+                
+                elif (largest_boat_yet == 4 and
+                    count_ship_size == 4 and
+                    boat_piece == 'T' and
+                    board.col[i] - countColShipPieces(board, i) + len(boat_piece) >= 4):
+                        moves.append([(j - 2, i, 'm'), (j - 1, i, 'm'), (j, i, 'b')])
+                        count_ship_size = 0
+                        boat_piece = ''
 
                 elif (largest_boat_yet == 3 and
-                      count_ship_size >= 3
+                      count_ship_size >= 3 and
+                      boat_piece == '' and 
+                      board.col[i] - countColShipPieces(board, i) + len(boat_piece) >= 3
                       ):
-                      if (board.adjacent_vertical_values(j - 3, i)[0] == 'T' or
-                          board.adjacent_vertical_values(j - 2, i)[0] == 'T' or
-                          board.adjacent_vertical_values(j + 1, i)[1] == 'B' or
-                          board.adjacent_vertical_values(j, i)[1] == 'B'
-                          ):
-                          continue
-                      if (board.col[i] - countColShipPieces(board, i) >= 2): 
-                          moves.append([(j - 2, i, 't'), (j - 1, i, 'm'), (j, i, 'b')])
+                      moves.append([(j - 2, i, 't'), (j - 1, i, 'm'), (j, i, 'b')])
+
+                elif (largest_boat_yet == 3 and
+                      count_ship_size >= 3 and
+                      boat_piece == 'M' and
+                      board.col[i] - countColShipPieces(board, i) + len(boat_piece) >= 3
+                      ):
+                      moves.append([(j - 2, i, 't'), (j, i, 'b')])
+
+                elif (largest_boat_yet == 3 and
+                      count_ship_size >= 3 and
+                      boat_piece == 'T' and
+                      board.col[i] - countColShipPieces(board, i) + len(boat_piece) >= 3
+                      ):
+                      moves.append([(j - 1, i, 'm'), (j, i, 'b')])
+
+                elif (largest_boat_yet == 3 and
+                      count_ship_size >= 3 and
+                      boat_piece == 'B' and
+                      board.col[i] - countColShipPieces(board, i) + len(boat_piece) >= 3
+                      ):
+                      moves.append([(j - 2, i, 't'), (j-1, i, 'm')])
 
                 elif (largest_boat_yet == 2 and
-                      count_ship_size >= 2
+                      count_ship_size >= 2 and
+                      board.col[i] - countColShipPieces(board, i) + len(boat_piece) >= 2
                       ):
-                      if (board.adjacent_vertical_values(j - 2, i)[0] == 'T' or
-                          board.adjacent_vertical_values(j - 1, i)[0] == 'T' or
-                          board.adjacent_vertical_values(j + 1, i)[1] == 'B' or
-                          board.adjacent_vertical_values(j, i)[1] == 'B'
-                          ):
-                          continue
-                      if (board.col[i] - countColShipPieces(board, i) >= 1): 
-                          moves.append([(j - 1, i, 't'), (j, i, 'b')])
+                      moves.append([(j - 1, i, 't'), (j, i, 'b')])
+
+                elif (largest_boat_yet == 2 and
+                      boat_piece == 'B' and
+                      count_ship_size >= 2 and
+                      board.col[i] - countColShipPieces(board, i) + len(boat_piece) >= 2
+                      ):
+                      moves.append([(j - 1, i, 't')])
+
+                elif (largest_boat_yet == 2 and
+                      count_ship_size >= 2 and
+                      boat_piece == 'T' and
+                      board.col[i] - countColShipPieces(board, i) + len(boat_piece) >= 2
+                      ):
+                      moves.append([(j, i, 'b')])
 
                 elif (largest_boat_yet == 1 and
                       count_ship_size >= 1 and
-                      board.col[i] - countColShipPieces(board, i) >= 0 and
-                      board.adjacent_horizontal_values(j, i)[0] == 'w' and
-                      board.adjacent_horizontal_values(j, i)[1] == 'w' and
-                      board.adjacent_vertical_values(j, i)[0] == 'w' and
-                      board.adjacent_vertical_values(j, i)[1] == 'w'
+                      board.col[i] - countColShipPieces(board, i) >= 1 and
+                      board.adjacent_horizontal_values(j, i)[0] in [None,'w'] and
+                      board.adjacent_horizontal_values(j, i)[1] in [None,'w'] and
+                      board.adjacent_vertical_values(j, i)[0] in [None,'w'] and
+                      board.adjacent_vertical_values(j, i)[1] in [None,'w']
                       ):
                       moves.append([(j, i, 'c')])
             else:
                 count_ship_size = 0
+                boat_piece = ''
 
     return moves
 
@@ -395,7 +466,7 @@ def fillAdjacents(board: Board):
             if (board.get_value(i, j) != None and board.get_value(i, j) in "TMLRBCtmlrbc"):
 
                 if (board.get_value(i, j) in "Tt"):
-                    for i_offset in [-1, 0, 1, 2]:
+                    for i_offset in [-1, 0, 1]:
                         for j_offset in [-1, 1]:
                             board.fillCell(i + i_offset, j + j_offset, 'w')
                     board.fillCell(i - 1, j, "w")
@@ -407,18 +478,18 @@ def fillAdjacents(board: Board):
 
                 elif (board.get_value(i, j) in "Ll"):
                     for i_offset in [-1, 1]:
-                        for j_offset in [-1, 0, 1, 2]:
+                        for j_offset in [-1, 0, 1]:
                             board.fillCell(i + i_offset, j + j_offset, 'w')
                     board.fillCell(i , j - 1, "w")
 
                 elif (board.get_value(i, j) in "Rr"):
                     for i_offset in [-1, 1]:
-                        for j_offset in [-2, -1, 0, 1]:
+                        for j_offset in [-1, 0, 1]:
                             board.fillCell(i + i_offset, j + j_offset, 'w')
                     board.fillCell(i , j + 1, "w")
 
                 elif (board.get_value(i, j) in "Bb"):
-                    for i_offset in [-2, -1, 0, 1]:
+                    for i_offset in [-1, 0, 1]:
                         for j_offset in [-1, 1]:
                             board.fillCell(i + i_offset, j + j_offset, 'w')
                     board.fillCell(i + 1, j, "w")
@@ -452,16 +523,15 @@ def fillCompletedLines(board: Board):
 
 def removeBoat(board: Board):
 
-    no_boats = 0
+    last_boat = 0
 
-    if (len(board.boats_remaining) == 1 and len(board.boats_remaining[0]) == 0):
-        board.boats_remaining.pop()
-        return no_boats
+    if (len(board.boats_remaining) == 0):
+        return last_boat
+
+    last_boat = board.boats_remaining[-1].pop()
 
     if (len(board.boats_remaining[-1]) == 0):
         board.boats_remaining.pop()
-
-    last_boat = board.boats_remaining[-1].pop()
 
     return last_boat
 
@@ -513,84 +583,10 @@ if __name__ == "__main__":
     # Retirar a solução a partir do nó resultante,
     # Imprimir para o standard output no formato indicado.
 
-    """
-    # EXEMPLO TESTE
-    board = Board.parse_instance()
-
-    print(board.row)
-    print(board.col)
-    print(board.hints)
-    
-    print('\n')
-    board.print()
-    print('\n')
-          
-    print(board.adjacent_vertical_values(3, 3))
-    print(board.adjacent_horizontal_values(3, 3))
-
-    print(board.adjacent_vertical_values(1, 0))
-    print(board.adjacent_horizontal_values(1, 0))
-
-    print(board.get_value(9, 9))
-    print(board.adjacent_vertical_values(8, 5))
-    print(board.adjacent_horizontal_values(8, 8))
-
-    print('\n')
-
-    problem = Bimaru(board)
-    initial_st = BimaruState(board)
-
-    second_st = problem.result(initial_st, "")
-
-    print(problem.actions(second_st))
-
-    print('\n')
-
-    second_st.board.print()
-    """
-    """
-    # EXEMPLO 1
-    # Ler a instância a partir do ficheiro 'i1.txt' (Figura 1):
-    # $ python3 bimaru.py < i1.txt
-    board = Board.parse_instance()
-    # Imprimir valores adjacentes
-    print(board.adjacent_vertical_values(3, 3))
-    print(board.adjacent_horizontal_values(3, 3))
-    print(board.adjacent_vertical_values(1, 0))
-    print(board.adjacent_horizontal_values(1, 0))
-    """
-
     board = Board.parse_instance()
 
     problem = Bimaru(board)
 
-    orig_state = problem.initial
-
-    #result_state = problem.result(orig_state, [(1,1,'w')])
-    
-    #print(problem.actions(orig_state))
-
-    #print("Actions to perform:", len(problem.actions(orig_state)))
-
-    print('\nThis board table is supposed to remain unchanged:\n')
-
-    orig_state.board.print()
-
-    print(orig_state.board.table[7][8])
-
-    #print("\nBoard table after the result\n")
-
-    #result_state.board.print()
-    #                                                SEARCH ALGOS NOT WORKING YET (WHEN IN USE PROGRAM NEVER ENDS)
-    goal_state = astar_search(problem, problem.h)
-
-    print("\nBFS table result:\n")
+    goal_state = depth_first_tree_search(problem)
 
     goal_state.state.board.print()
-
-    print("\nIs goal?", problem.goal_test(goal_state.state))
-
-    print(goal_state.state.board.table[8][7])
-
-    print(goal_state.state.board.boats_remaining, len(goal_state.state.board.boats_remaining))
-    
